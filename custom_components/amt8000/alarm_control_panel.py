@@ -25,11 +25,13 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator: Amt8000Coordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(
+    entities: list[AlarmControlPanelEntity] = [
         Amt8000PartitionPanel(coordinator, p.index, entry)
         for p in coordinator.data.partitions
         if p.index != AGGREGATE_PARTITION_IDX
-    )
+    ]
+    entities.append(Amt8000MasterPanel(coordinator, entry))
+    async_add_entities(entities)
 
 
 def _device_info(entry: ConfigEntry) -> DeviceInfo:
@@ -87,4 +89,53 @@ class Amt8000PartitionPanel(CoordinatorEntity[Amt8000Coordinator], AlarmControlP
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
         await self.coordinator.client.disarm_partition(self._partition_idx)
+        await self.coordinator.async_request_refresh()
+
+
+class Amt8000MasterPanel(CoordinatorEntity[Amt8000Coordinator], AlarmControlPanelEntity):
+    """Virtual panel that arms/disarms all user groups at once."""
+
+    _attr_has_entity_name = True
+    _attr_supported_features = AlarmControlPanelEntityFeature.ARM_AWAY
+    _attr_code_arm_required = False
+    _attr_code_disarm_required = False
+
+    def __init__(self, coordinator: Amt8000Coordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_all"
+        self._attr_name = "All Groups"
+        self._attr_device_info = _device_info(entry)
+
+    def _real_partitions(self):
+        if not self.coordinator.data:
+            return []
+        return [
+            p for p in self.coordinator.data.partitions
+            if p.index != AGGREGATE_PARTITION_IDX
+        ]
+
+    @property
+    def alarm_state(self) -> AlarmControlPanelState | None:
+        parts = self._real_partitions()
+        if not parts:
+            return None
+        if any(p.firing for p in parts):
+            return AlarmControlPanelState.TRIGGERED
+        if all(p.armed for p in parts):
+            return AlarmControlPanelState.ARMED_AWAY
+        if any(p.armed for p in parts):
+            return AlarmControlPanelState.ARMED_HOME
+        return AlarmControlPanelState.DISARMED
+
+    async def async_alarm_arm_away(self, code: str | None = None) -> None:
+        for p in self._real_partitions():
+            try:
+                await self.coordinator.client.arm_partition(p.index)
+            except OpenZones:
+                _LOGGER.warning("Master arm: group %d blocked — open zones", p.index)
+        await self.coordinator.async_request_refresh()
+
+    async def async_alarm_disarm(self, code: str | None = None) -> None:
+        for p in self._real_partitions():
+            await self.coordinator.client.disarm_partition(p.index)
         await self.coordinator.async_request_refresh()
