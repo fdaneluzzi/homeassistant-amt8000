@@ -1,0 +1,5 @@
+{
+  "name": "Intelbras AMT 8000",
+  "homeassistant": "2024.1.0",
+  "country": ["BR"]
+}

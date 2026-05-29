@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Intelbras AMT 8000",
+        "description": "Conecte-se à central de alarme AMT 8000.",
+        "data": {
+          "host": "IP da central",
+          "port": "Porta TCP",
+          "password": "Senha da central (4 ou 6 dígitos)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Não foi possível conectar à central. Verifique o IP e a porta.",
+      "invalid_auth": "Senha inválida.",
+      "unknown": "Erro inesperado. Consulte os logs do Home Assistant."
+    },
+    "abort": {
+      "already_configured": "Esta central já está configurada."
+    }
+  }
+}
