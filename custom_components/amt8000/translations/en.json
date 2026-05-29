@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Intelbras AMT 8000",
+        "description": "Connect to your AMT 8000 alarm panel.",
+        "data": {
+          "host": "Panel IP address",
+          "port": "TCP port",
+          "password": "Panel password (4 or 6 digits)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the panel. Check the IP address and port.",
+      "invalid_auth": "Invalid password.",
+      "unknown": "Unexpected error. See Home Assistant logs."
+    },
+    "abort": {
+      "already_configured": "This panel is already configured."
+    }
+  }
+}

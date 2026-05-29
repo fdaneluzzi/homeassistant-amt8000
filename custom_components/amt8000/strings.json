@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Intelbras AMT 8000",
+        "description": "Connect to your AMT 8000 alarm panel via ISECNet v2 (TCP {port}).",
+        "data": {
+          "host": "Panel IP address",
+          "port": "TCP port",
+          "password": "Panel password (4 or 6 digits)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Cannot connect to the panel. Check IP and port.",
+      "invalid_auth": "Invalid password.",
+      "unknown": "Unexpected error. Check logs."
+    },
+    "abort": {
+      "already_configured": "This panel is already configured."
+    }
+  }
+}
