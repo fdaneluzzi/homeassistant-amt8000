@@ -52,7 +52,7 @@ class Zone:
 
     @property
     def is_open(self) -> bool:
-        return self.open or self.violated
+        return self.open
 
 
 @dataclasses.dataclass

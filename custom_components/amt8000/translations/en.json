@@ -1,4 +1,12 @@
 {
+  "options": {
+    "step": {
+      "init": {
+        "title": "Zone sensor types",
+        "description": "Choose the device class for each zone. This changes the label shown in Home Assistant (On/Off, Open/Closed, Detected/Clear, etc.)."
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {

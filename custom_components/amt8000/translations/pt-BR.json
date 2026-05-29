@@ -1,4 +1,12 @@
 {
+  "options": {
+    "step": {
+      "init": {
+        "title": "Tipos de sensor por zona",
+        "description": "Escolha a classe do sensor para cada zona. Isso muda o rótulo exibido no Home Assistant (On/Off, Aberto/Fechado, Detectado/Limpo, etc.)."
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {

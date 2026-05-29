@@ -35,6 +35,7 @@ class Amt8000ZoneSensor(CoordinatorEntity[Amt8000Coordinator], BinarySensorEntit
     ) -> None:
         super().__init__(coordinator)
         self._zone_number = zone_number
+        self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_zone_{zone_number}"
         self._attr_name = f"Zone {zone_number}"
         self._attr_device_info = _device_info(entry)
@@ -46,6 +47,11 @@ class Amt8000ZoneSensor(CoordinatorEntity[Amt8000Coordinator], BinarySensorEntit
             if z.number == self._zone_number:
                 return z
         return None
+
+    @property
+    def device_class(self) -> BinarySensorDeviceClass | None:
+        dc = self._entry.options.get(f"zone_{self._zone_number}_device_class", "")
+        return BinarySensorDeviceClass(dc) if dc else None
 
     @property
     def is_on(self) -> bool | None:
