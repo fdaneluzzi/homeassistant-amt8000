@@ -13,7 +13,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .client import OpenZones
+from .client import ALL_PARTITIONS, OpenZones
 from .const import AGGREGATE_PARTITION_IDX, DOMAIN
 from .coordinator import Amt8000Coordinator
 
@@ -128,14 +128,12 @@ class Amt8000MasterPanel(CoordinatorEntity[Amt8000Coordinator], AlarmControlPane
         return AlarmControlPanelState.DISARMED
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
-        for p in self._real_partitions():
-            try:
-                await self.coordinator.client.arm_partition(p.index)
-            except OpenZones:
-                _LOGGER.warning("Master arm: group %d blocked — open zones", p.index)
+        try:
+            await self.coordinator.client.arm_partition(ALL_PARTITIONS)
+        except OpenZones:
+            _LOGGER.warning("Master arm blocked — open zones")
         await self.coordinator.async_request_refresh()
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
-        for p in self._real_partitions():
-            await self.coordinator.client.disarm_partition(p.index)
+        await self.coordinator.client.disarm_partition(ALL_PARTITIONS)
         await self.coordinator.async_request_refresh()
