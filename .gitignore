@@ -1,0 +1,36 @@
+# Secrets / credentials
+_secrets/
+*.key
+*.pem
+*.p12
+.env
+.env.*
+
+# Captures (never commit raw traffic)
+captures/*.pcap
+captures/*.pcapng
+captures/*.cap
+
+# APK / binary artifacts
+*.apk
+*.xapk
+*.so
+*.dex
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+
+# macOS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+*.swp
