@@ -16,13 +16,25 @@ _SRC = [0x8F, 0xE0]
 
 _CMD_AUTH       = [0xF0, 0xF0]
 _CMD_STATUS     = [0x0B, 0x4A]
+_CMD_DEVICES    = [0x0B, 0x50]
 _CMD_ARM        = [0x40, 0x1E]
+_CMD_BYPASS     = [0x40, 0x1F]
+_CMD_PGM        = [0x45, 0xAF]
 _CMD_DISCONNECT = [0xF0, 0xF1]
 
 _SUBCMD_DISARM = 0x00
 _SUBCMD_ARM    = 0x01
 
+_NACK = 0xF0FD
+
 ALL_PARTITIONS = 0xFF
+MAX_PGMS = 16
+# PGM on/off bits live in the 0x0B4A status payload; which indexes exist
+# (are actually recorded on the panel) comes from the 0x0B50 response.
+_PGM_ON_OFFSET = 137
+_PGM_COMM_FAIL_OFFSET = 87
+_PGM_TAMPER_OFFSET = 103
+_PGM_LOW_BATTERY_OFFSET = 119
 
 _STATES = {0: "DISARMED", 1: "PARTIAL", 3: "ARMED"}
 _BATTERY = {1: "dead", 2: "low", 3: "middle", 4: "full"}
@@ -38,6 +50,14 @@ class InvalidAuth(Exception):
 
 class OpenZones(Exception):
     """Raised when arm is blocked because zones are open."""
+
+
+class BypassError(Exception):
+    """Raised when the panel rejects a zone bypass command."""
+
+
+class PgmError(Exception):
+    """Raised when the panel rejects a PGM command."""
 
 
 @dataclasses.dataclass
@@ -66,6 +86,15 @@ class Partition:
 
 
 @dataclasses.dataclass
+class Pgm:
+    index: int
+    on: bool
+    tamper: bool
+    low_battery: bool
+    comm_fail: bool
+
+
+@dataclasses.dataclass
 class PanelStatus:
     model: int
     version: str
@@ -77,6 +106,7 @@ class PanelStatus:
     tamper: bool
     partitions: list[Partition]
     zones: list[Zone]
+    pgms: list[Pgm]
 
 
 class Amt8000Client:
@@ -162,22 +192,84 @@ class Amt8000Client:
         try:
             writer.write(self._packet(_CMD_STATUS))
             await writer.drain()
-            resp = await self._read_frame(reader)
+            status_resp = await self._read_frame(reader)
+
+            # PGM discovery (0x0B50) is best-effort and EXPERIMENTAL: some
+            # firmwares may not support it or may not reply at all. Never let
+            # it break status polling, which is the core, verified feature.
+            pgm_indexes: list[int] = []
+            try:
+                writer.write(self._packet(_CMD_DEVICES))
+                await writer.drain()
+                devices_resp = await self._read_frame(reader)
+                pgm_indexes = self._recorded_pgm_indexes(
+                    self._response_payload(devices_resp, expected=_CMD_DEVICES)
+                )
+            except CannotConnect as exc:
+                _LOGGER.debug("PGM discovery (0x0B50) failed, skipping: %s", exc)
         except Exception:
             await self._disconnect(writer)
             raise
         await self._disconnect(writer)
 
-        # payload = full_frame[8 : 8+payload_length]
-        length = int.from_bytes(resp[4:6], "big") - 2  # subtract 2 cmd bytes
-        payload = resp[8 : 8 + length]
-        return self._parse_status(payload)
+        # No command-match check here: preserve the original, hardware-verified
+        # behavior of trusting the frame's own length field for the status reply.
+        payload = self._response_payload(status_resp)
+        return self._parse_status(payload, pgm_indexes)
 
     async def arm_partition(self, partition_idx: int) -> None:
         await self._arm_cmd(partition_idx, _SUBCMD_ARM)
 
     async def disarm_partition(self, partition_idx: int) -> None:
         await self._arm_cmd(partition_idx, _SUBCMD_DISARM)
+
+    async def bypass_zone(self, zone_index: int, enabled: bool) -> None:
+        """Bypass (anular) or restore a single zone by its 0-based index.
+
+        EXPERIMENTAL: not verified against a real AMT 8000 panel by the
+        maintainer. If the panel rejects or misbehaves on this command,
+        please open an issue with the debug log.
+        """
+        if not 0 <= zone_index < 56:
+            raise BypassError(f"Invalid zone index: {zone_index}")
+
+        reader, writer = await self._connect_and_auth()
+        try:
+            writer.write(self._packet(_CMD_BYPASS, [zone_index, 0x01 if enabled else 0x00]))
+            await writer.drain()
+            resp = await self._read_frame(reader)
+            self._raise_for_nack(resp, BypassError, "Zone bypass")
+        finally:
+            await self._disconnect(writer)
+
+    async def set_pgm(self, pgm_index: int, enabled: bool) -> None:
+        """Turn a PGM (auxiliary output) on or off by its 0-based index.
+
+        EXPERIMENTAL: not verified against a real AMT 8000 panel by the
+        maintainer. If the panel rejects or misbehaves on this command,
+        please open an issue with the debug log.
+        """
+        if not 0 <= pgm_index < MAX_PGMS:
+            raise PgmError(f"Invalid PGM index: {pgm_index}")
+
+        reader, writer = await self._connect_and_auth()
+        try:
+            writer.write(self._packet(_CMD_PGM, [pgm_index, 0x01 if enabled else 0x00]))
+            await writer.drain()
+            resp = await self._read_frame(reader)
+            self._raise_for_nack(resp, PgmError, "PGM command")
+        finally:
+            await self._disconnect(writer)
+
+    @staticmethod
+    def _raise_for_nack(resp: bytes, exc_cls: type[Exception], what: str) -> None:
+        if len(resp) < 8:
+            raise exc_cls(f"{what}: invalid response from panel")
+        command = int.from_bytes(resp[6:8], "big")
+        if command == _NACK:
+            error_code = resp[8] if len(resp) > 8 else -1
+            _LOGGER.warning("%s rejected by panel: NACK code 0x%02X", what, error_code)
+            raise exc_cls(f"{what} rejected by panel (code 0x{error_code:02X})")
 
     async def _arm_cmd(self, partition_idx: int, subcmd: int) -> None:
         reader, writer = await self._connect_and_auth()
@@ -198,7 +290,64 @@ class Amt8000Client:
     # ── status parser ─────────────────────────────────────────────────────────
 
     @staticmethod
-    def _parse_status(payload: bytes) -> PanelStatus:
+    def _response_payload(frame: bytes, expected: list[int] | None = None) -> bytes:
+        """Extract a response's payload; empty on NACK, short frame, or command mismatch."""
+        if len(frame) < 8:
+            return b""
+        command = int.from_bytes(frame[6:8], "big")
+        if command == _NACK:
+            return b""
+        if expected is not None and command != int.from_bytes(bytes(expected), "big"):
+            return b""
+        length = int.from_bytes(frame[4:6], "big") - 2  # subtract 2 cmd bytes
+        if length < 0:
+            return b""
+        return frame[8 : 8 + length]
+
+    @staticmethod
+    def _recorded_pgm_indexes(devices_payload: bytes) -> list[int]:
+        """0-based PGM indexes marked as recorded in the 0x0B50 response.
+
+        EXPERIMENTAL: byte layout not verified against a real panel.
+        """
+        if len(devices_payload) < 26:
+            return []
+        indexes: list[int] = []
+        for bit in range(4):
+            if devices_payload[25] & (1 << (4 + bit)):
+                indexes.append(bit)
+        if len(devices_payload) >= 27:
+            for bit in range(8):
+                if devices_payload[26] & (1 << bit):
+                    indexes.append(bit + 4)
+        if len(devices_payload) >= 28:
+            for bit in range(4):
+                if devices_payload[27] & (1 << bit):
+                    indexes.append(bit + 12)
+        return indexes
+
+    @staticmethod
+    def _mask_bit(payload: bytes, offset: int, index: int) -> bool:
+        byte_index, bit_index = divmod(index, 8)
+        pos = offset + byte_index
+        return bool(payload[pos] & (1 << bit_index)) if pos < len(payload) else False
+
+    @classmethod
+    def _parse_pgms(cls, payload: bytes, indexes: list[int]) -> list[Pgm]:
+        return [
+            Pgm(
+                index=i,
+                on=cls._mask_bit(payload, _PGM_ON_OFFSET, i),
+                tamper=cls._mask_bit(payload, _PGM_TAMPER_OFFSET, i),
+                low_battery=cls._mask_bit(payload, _PGM_LOW_BATTERY_OFFSET, i),
+                comm_fail=cls._mask_bit(payload, _PGM_COMM_FAIL_OFFSET, i),
+            )
+            for i in indexes
+            if 0 <= i < MAX_PGMS
+        ]
+
+    @classmethod
+    def _parse_status(cls, payload: bytes, pgm_indexes: list[int] | None = None) -> PanelStatus:
         if len(payload) < 143:
             raise CannotConnect(f"Truncated status payload: {len(payload)} bytes (expected 143)")
 
@@ -243,4 +392,5 @@ class Amt8000Client:
             tamper=bool(payload[71] & 0x02),
             partitions=partitions,
             zones=zones,
+            pgms=cls._parse_pgms(payload, pgm_indexes or []),
         )

@@ -36,6 +36,19 @@ Native Home Assistant integration for the **Intelbras AMT 8000** alarm panel, co
 | `binary_sensor.amt8000_siren` | Binary sensor (sound) | True while siren is actively sounding. |
 | `event.amt8000_alarm` | Event | Fires `alarm_triggered` on siren rising edge. |
 
+## ⚠️ Experimental: PGM outputs and zone bypass
+
+Two additional `switch` entities are shipped disabled by default (enable them per-entity in **Settings → Devices & Services → Entities** if you want them):
+
+- `switch.amt8000_pgm_N` — turns a PGM (auxiliary output) on the panel on/off. Only created for PGMs the panel reports as recorded.
+- `switch.amt8000_zone_N_bypass` — anula (bypass) or reativa an individual zone, so it can be armed while open/violated.
+
+**These rely on protocol commands (`0x0B50`, `0x40 1F`, `0x45 AF`) that have not been verified against a real AMT 8000 panel by the maintainer** — unlike the rest of this integration (see [Tested hardware](#tested-hardware)). The byte layout was derived from a community fork, not from a live capture against this maintainer's hardware. That's why the entities are opt-in and disabled by default.
+
+If you enable them and something doesn't work as expected, please [open an issue](https://github.com/fdaneluzzi/homeassistant-amt8000/issues) with:
+- Your panel model/firmware
+- The debug log for the failing call (Settings → Logs, filter by `custom_components.amt8000` — command rejections are logged as `WARNING` with the panel's NACK code)
+
 ## Protocol notes
 
 The AMT 8000 uses **ISECNet v2** (TCP 9009), which is distinct from the `0xe7` protocol used by lower-end AMT models (1016/2018 NET).
