@@ -44,6 +44,13 @@ Partition index 0 in the protocol is a read-only AND-aggregate (armed only when 
 
 Full protocol documentation in [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
 
+## Support this project
+
+If this integration saved you time or money, consider supporting its development:
+
+- **GitHub Sponsors:** [github.com/sponsors/fdaneluzzi](https://github.com/sponsors/fdaneluzzi)
+- **PIX (Brasil):** `aae9a1b1-11e2-4282-a16d-7df8f48ae903`
+
 ## License
 
 MIT
