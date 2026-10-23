@@ -26,6 +26,7 @@ _SUBCMD_DISARM = 0x00
 _SUBCMD_ARM    = 0x01
 
 _NACK = 0xF0FD
+_AUTH_ATTEMPTS = 3
 
 ALL_PARTITIONS = 0xFF
 MAX_PGMS = 16
@@ -115,6 +116,9 @@ class Amt8000Client:
         self._port = port
         self._password = password
         self._timeout = timeout
+        # The panel accepts very few simultaneous sessions, so the periodic
+        # poll and user commands must never talk to it at the same time.
+        self._lock = asyncio.Lock()
 
     # ── wire helpers ──────────────────────────────────────────────────────────
 
@@ -181,7 +185,7 @@ class Amt8000Client:
             _LOGGER.debug("Skipping unexpected frame (command 0x%04X)", command)
         raise CannotConnect(f"No 0x{want:04X} response from panel")
 
-    async def _connect_and_auth(self) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+    async def _connect_and_auth_once(self) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         try:
             reader, writer = await asyncio.wait_for(
                 asyncio.open_connection(self._host, self._port), self._timeout
@@ -208,6 +212,23 @@ class Amt8000Client:
 
         return reader, writer
 
+    async def _connect_and_auth(self) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        """Connect and authenticate, retrying transient rejections.
+
+        The panel sometimes rejects auth with a non-password code (e.g. 0x9C)
+        while a previous session is still being released. A wrong password
+        (InvalidAuth) is never retried.
+        """
+        for attempt in range(1, _AUTH_ATTEMPTS + 1):
+            try:
+                return await self._connect_and_auth_once()
+            except CannotConnect as exc:
+                if attempt == _AUTH_ATTEMPTS:
+                    raise
+                _LOGGER.debug("Auth attempt %d/%d failed: %s", attempt, _AUTH_ATTEMPTS, exc)
+                await asyncio.sleep(attempt)
+        raise CannotConnect("unreachable")  # pragma: no cover
+
     async def _disconnect(self, writer: asyncio.StreamWriter) -> None:
         try:
             writer.write(self._packet(_CMD_DISCONNECT))
@@ -223,6 +244,10 @@ class Amt8000Client:
     # ── public API ────────────────────────────────────────────────────────────
 
     async def get_status(self) -> PanelStatus:
+        async with self._lock:
+            return await self._get_status()
+
+    async def _get_status(self) -> PanelStatus:
         reader, writer = await self._connect_and_auth()
         try:
             writer.write(self._packet(_CMD_STATUS))
@@ -266,14 +291,10 @@ class Amt8000Client:
         if not 0 <= zone_index < 56:
             raise BypassError(f"Invalid zone index: {zone_index}")
 
-        reader, writer = await self._connect_and_auth()
-        try:
-            writer.write(self._packet(_CMD_BYPASS, [zone_index, 0x01 if enabled else 0x00]))
-            await writer.drain()
-            resp = await self._read_frame(reader)
-            self._raise_for_nack(resp, BypassError, "Zone bypass")
-        finally:
-            await self._disconnect(writer)
+        async with self._lock:
+            await self._send_simple(
+                _CMD_BYPASS, zone_index, enabled, BypassError, "Zone bypass"
+            )
 
     async def set_pgm(self, pgm_index: int, enabled: bool) -> None:
         """Turn a PGM (auxiliary output) on or off by its 0-based index.
@@ -285,12 +306,18 @@ class Amt8000Client:
         if not 0 <= pgm_index < MAX_PGMS:
             raise PgmError(f"Invalid PGM index: {pgm_index}")
 
+        async with self._lock:
+            await self._send_simple(_CMD_PGM, pgm_index, enabled, PgmError, "PGM command")
+
+    async def _send_simple(
+        self, cmd: list[int], index: int, enabled: bool, exc_cls: type[Exception], what: str
+    ) -> None:
         reader, writer = await self._connect_and_auth()
         try:
-            writer.write(self._packet(_CMD_PGM, [pgm_index, 0x01 if enabled else 0x00]))
+            writer.write(self._packet(cmd, [index, 0x01 if enabled else 0x00]))
             await writer.drain()
             resp = await self._read_frame(reader)
-            self._raise_for_nack(resp, PgmError, "PGM command")
+            self._raise_for_nack(resp, exc_cls, what)
         finally:
             await self._disconnect(writer)
 
@@ -305,6 +332,10 @@ class Amt8000Client:
             raise exc_cls(f"{what} rejected by panel (code 0x{error_code:02X})")
 
     async def _arm_cmd(self, partition_idx: int, subcmd: int) -> None:
+        async with self._lock:
+            await self._arm_cmd_locked(partition_idx, subcmd)
+
+    async def _arm_cmd_locked(self, partition_idx: int, subcmd: int) -> None:
         reader, writer = await self._connect_and_auth()
         try:
             writer.write(self._packet(_CMD_ARM, [partition_idx, subcmd]))
