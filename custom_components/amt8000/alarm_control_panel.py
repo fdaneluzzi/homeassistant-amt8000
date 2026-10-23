@@ -9,11 +9,12 @@ from homeassistant.components.alarm_control_panel import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .client import ALL_PARTITIONS, OpenZones
+from .client import ALL_PARTITIONS, CannotConnect, InvalidAuth, OpenZones
 from .const import AGGREGATE_PARTITION_IDX, DOMAIN
 from .coordinator import Amt8000Coordinator
 
@@ -32,6 +33,16 @@ async def async_setup_entry(
     ]
     entities.append(Amt8000MasterPanel(coordinator, entry))
     async_add_entities(entities)
+
+
+async def _run_command(coro) -> None:
+    """Run a panel command, turning client errors into clear HA errors."""
+    try:
+        await coro
+    except InvalidAuth as exc:
+        raise HomeAssistantError(f"Panel rejected the password: {exc}") from exc
+    except CannotConnect as exc:
+        raise HomeAssistantError(f"Could not reach the panel: {exc}") from exc
 
 
 def _device_info(entry: ConfigEntry) -> DeviceInfo:
@@ -82,13 +93,13 @@ class Amt8000PartitionPanel(CoordinatorEntity[Amt8000Coordinator], AlarmControlP
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
         try:
-            await self.coordinator.client.arm_partition(self._partition_idx)
+            await _run_command(self.coordinator.client.arm_partition(self._partition_idx))
         except OpenZones:
             _LOGGER.warning("Group %d: arm blocked — open zones", self._partition_idx)
         await self.coordinator.async_request_refresh()
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
-        await self.coordinator.client.disarm_partition(self._partition_idx)
+        await _run_command(self.coordinator.client.disarm_partition(self._partition_idx))
         await self.coordinator.async_request_refresh()
 
 
@@ -129,11 +140,11 @@ class Amt8000MasterPanel(CoordinatorEntity[Amt8000Coordinator], AlarmControlPane
 
     async def async_alarm_arm_away(self, code: str | None = None) -> None:
         try:
-            await self.coordinator.client.arm_partition(ALL_PARTITIONS)
+            await _run_command(self.coordinator.client.arm_partition(ALL_PARTITIONS))
         except OpenZones:
             _LOGGER.warning("Master arm blocked — open zones")
         await self.coordinator.async_request_refresh()
 
     async def async_alarm_disarm(self, code: str | None = None) -> None:
-        await self.coordinator.client.disarm_partition(ALL_PARTITIONS)
+        await _run_command(self.coordinator.client.disarm_partition(ALL_PARTITIONS))
         await self.coordinator.async_request_refresh()
