@@ -2,6 +2,7 @@
 
 [![HACS Custom][hacs-shield]][hacs-url]
 [![GitHub Release][release-shield]][release-url]
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-fdaneluzzi-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/fdaneluzzi)
 
 Native Home Assistant integration for the **Intelbras AMT 8000** alarm panel, communicating directly over the local network via the ISECNet v2 protocol. No cloud dependency at runtime.
 
@@ -61,8 +62,15 @@ Full protocol documentation in [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
 
 If this integration saved you time or money, consider supporting its development:
 
-- **GitHub Sponsors:** [github.com/sponsors/fdaneluzzi](https://github.com/sponsors/fdaneluzzi)
-- **PIX (Brasil):** `aae9a1b1-11e2-4282-a16d-7df8f48ae903`
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-fdaneluzzi-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/fdaneluzzi)
+[![GitHub Sponsors](https://img.shields.io/badge/GitHub%20Sponsors-fdaneluzzi-EA4AAA?style=for-the-badge&logo=githubsponsors&logoColor=white)](https://github.com/sponsors/fdaneluzzi)
+
+<details>
+<summary>PIX (Brasil)</summary>
+
+Chave aleatória: `aae9a1b1-11e2-4282-a16d-7df8f48ae903`
+
+</details>
 
 ## License
 
