@@ -150,6 +150,37 @@ class Amt8000Client:
             raise CannotConnect("Incomplete response from panel") from exc
         return header + body
 
+    async def _read_response(
+        self,
+        reader: asyncio.StreamReader,
+        expected: list[int],
+        max_frames: int = 4,
+        min_payload: int | None = None,
+    ) -> bytes:
+        """Read frames until the one answering `expected` arrives.
+
+        Unrelated frames (e.g. asynchronous notifications) are skipped. A NACK
+        or no matching frame raises CannotConnect, with the raw bytes logged.
+        With `min_payload`, a frame that long is also accepted whatever its
+        command (keeps the original lenient behavior of the status reply).
+        """
+        want = int.from_bytes(bytes(expected), "big")
+        for _ in range(max_frames):
+            frame = await self._read_frame(reader)
+            _LOGGER.debug("Frame received: %s", frame.hex(" "))
+            command = int.from_bytes(frame[6:8], "big") if len(frame) >= 8 else -1
+            if command == want or (
+                min_payload is not None
+                and command != _NACK
+                and len(self._response_payload(frame)) >= min_payload
+            ):
+                return frame
+            if command == _NACK:
+                code = frame[8] if len(frame) > 8 else -1
+                raise CannotConnect(f"Panel replied NACK (code 0x{code:02X})")
+            _LOGGER.debug("Skipping unexpected frame (command 0x%04X)", command)
+        raise CannotConnect(f"No 0x{want:04X} response from panel")
+
     async def _connect_and_auth(self) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         try:
             reader, writer = await asyncio.wait_for(
@@ -158,18 +189,22 @@ class Amt8000Client:
         except (OSError, asyncio.TimeoutError) as exc:
             raise CannotConnect(f"Cannot connect to {self._host}:{self._port}") from exc
 
-        auth_payload = [0x00] + self._encode_password(self._password) + [0x10]
-        writer.write(self._packet(_CMD_AUTH, auth_payload))
-        await writer.drain()
+        try:
+            auth_payload = [0x00] + self._encode_password(self._password) + [0x10]
+            writer.write(self._packet(_CMD_AUTH, auth_payload))
+            await writer.drain()
 
-        resp = await self._read_frame(reader)
-        result = resp[8] if len(resp) > 8 else -1
-        if result == 0x01:
-            writer.close()
-            raise InvalidAuth("Invalid password")
-        if result != 0x00:
-            writer.close()
-            raise CannotConnect(f"Auth rejected: code=0x{result:02X}")
+            resp = await self._read_frame(reader)
+            _LOGGER.debug("Auth response: %s", resp.hex(" "))
+            result = resp[8] if len(resp) > 8 else -1
+            if result == 0x01:
+                raise InvalidAuth("Invalid password")
+            if result != 0x00:
+                raise CannotConnect(f"Auth rejected: code=0x{result:02X}")
+        except BaseException:
+            # Always release the panel session: it only accepts a few at once.
+            await self._disconnect(writer)
+            raise
 
         return reader, writer
 
@@ -192,7 +227,7 @@ class Amt8000Client:
         try:
             writer.write(self._packet(_CMD_STATUS))
             await writer.drain()
-            status_resp = await self._read_frame(reader)
+            status_resp = await self._read_response(reader, _CMD_STATUS, min_payload=143)
 
             # PGM discovery (0x0B50) is best-effort and EXPERIMENTAL: some
             # firmwares may not support it or may not reply at all. Never let
@@ -201,7 +236,7 @@ class Amt8000Client:
             try:
                 writer.write(self._packet(_CMD_DEVICES))
                 await writer.drain()
-                devices_resp = await self._read_frame(reader)
+                devices_resp = await self._read_response(reader, _CMD_DEVICES)
                 pgm_indexes = self._recorded_pgm_indexes(
                     self._response_payload(devices_resp, expected=_CMD_DEVICES)
                 )
@@ -212,8 +247,6 @@ class Amt8000Client:
             raise
         await self._disconnect(writer)
 
-        # No command-match check here: preserve the original, hardware-verified
-        # behavior of trusting the frame's own length field for the status reply.
         payload = self._response_payload(status_resp)
         return self._parse_status(payload, pgm_indexes)
 
@@ -349,6 +382,7 @@ class Amt8000Client:
     @classmethod
     def _parse_status(cls, payload: bytes, pgm_indexes: list[int] | None = None) -> PanelStatus:
         if len(payload) < 143:
+            _LOGGER.debug("Short status payload: %s", payload.hex(" "))
             raise CannotConnect(f"Truncated status payload: {len(payload)} bytes (expected 143)")
 
         status_byte = payload[20]

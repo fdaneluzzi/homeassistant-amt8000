@@ -8,3 +8,6 @@ SCAN_INTERVAL_SECONDS = 5
 AGGREGATE_PARTITION_IDX = 0
 
 EVENT_ALARM_TRIGGERED = f"{DOMAIN}_alarm_triggered"
+
+# Options
+CONF_READ_ONLY = "read_only"
