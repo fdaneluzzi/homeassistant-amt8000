@@ -6,7 +6,7 @@ from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant
 
 from .client import Amt8000Client
-from .const import DOMAIN
+from .const import CONF_READ_ONLY, DOMAIN
 from .coordinator import Amt8000Coordinator
 
 PLATFORMS = [
@@ -15,6 +15,14 @@ PLATFORMS = [
     Platform.EVENT,
     Platform.SWITCH,
 ]
+# Platforms that can send commands (arm/disarm, PGM, bypass) to the panel.
+CONTROL_PLATFORMS = {Platform.ALARM_CONTROL_PANEL, Platform.SWITCH}
+
+
+def _platforms(entry: ConfigEntry) -> list[Platform]:
+    if entry.options.get(CONF_READ_ONLY):
+        return [p for p in PLATFORMS if p not in CONTROL_PLATFORMS]
+    return PLATFORMS
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -27,7 +35,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await hass.config_entries.async_forward_entry_setups(entry, _platforms(entry))
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     return True
 
@@ -37,7 +45,7 @@ async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, _platforms(entry))
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
     return unload_ok

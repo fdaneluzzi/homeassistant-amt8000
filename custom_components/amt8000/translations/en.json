@@ -3,7 +3,10 @@
     "step": {
       "init": {
         "title": "Zone sensor types",
-        "description": "Choose the device class for each zone. This changes the label shown in Home Assistant (On/Off, Open/Closed, Detected/Clear, etc.)."
+        "description": "Read-only mode hides arm/disarm, PGM and bypass controls (monitoring only). Pick each zone's sensor class below.",
+        "data": {
+          "read_only": "Read-only (monitoring only, no arm/disarm/PGM/bypass)"
+        }
       }
     }
   },

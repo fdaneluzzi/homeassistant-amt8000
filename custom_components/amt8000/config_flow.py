@@ -8,7 +8,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .client import Amt8000Client, CannotConnect, InvalidAuth
-from .const import DEFAULT_PORT, DOMAIN
+from .const import CONF_READ_ONLY, DEFAULT_PORT, DOMAIN
 
 _DEVICE_CLASS_OPTIONS = [
     selector.SelectOptionDict(value="", label="On/Off (default)"),
@@ -68,13 +68,18 @@ class Amt8000ConfigFlow(ConfigFlow, domain=DOMAIN):
 
 class Amt8000OptionsFlow(OptionsFlow):
     async def async_step_init(self, user_input: dict | None = None) -> ConfigFlowResult:
-        coordinator = self.hass.data[DOMAIN][self.config_entry.entry_id]
-        zones = coordinator.data.zones if coordinator.data else []
+        # The entry may not be loaded (disabled or failed setup).
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self.config_entry.entry_id)
+        zones = coordinator.data.zones if coordinator and coordinator.data else []
 
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 
-        fields: dict = {}
+        fields: dict = {
+            vol.Optional(
+                CONF_READ_ONLY, default=self.config_entry.options.get(CONF_READ_ONLY, False)
+            ): bool
+        }
         for zone in zones:
             key = f"zone_{zone.number}_device_class"
             fields[vol.Optional(key, default=self.config_entry.options.get(key, ""))] = (
