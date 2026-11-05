@@ -1,6 +1,9 @@
 """Config flow — sets up the AMT 8000 integration via UI."""
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_PORT
@@ -64,6 +67,41 @@ class Amt8000ConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
 
         return self.async_show_form(step_id="user", data_schema=_SCHEMA, errors=errors)
+
+    async def async_step_reauth(self, entry_data: Mapping[str, Any]) -> ConfigFlowResult:
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict | None = None
+    ) -> ConfigFlowResult:
+        """Ask for a new password after the panel rejected the stored one."""
+        errors: dict[str, str] = {}
+        entry = self._get_reauth_entry()
+
+        if user_input is not None:
+            password = user_input[CONF_PASSWORD].strip()
+            client = Amt8000Client(
+                host=entry.data[CONF_HOST], port=entry.data[CONF_PORT], password=password
+            )
+            try:
+                await client.get_status()
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except Exception:
+                errors["base"] = "unknown"
+            else:
+                return self.async_update_reload_and_abort(
+                    entry, data_updates={CONF_PASSWORD: password}
+                )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
+            description_placeholders={"host": entry.data[CONF_HOST]},
+            errors=errors,
+        )
 
 
 class Amt8000OptionsFlow(OptionsFlow):

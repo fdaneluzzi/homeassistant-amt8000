@@ -14,7 +14,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .client import ALL_PARTITIONS, CannotConnect, InvalidAuth, OpenZones
+from .client import ALL_PARTITIONS, CannotConnect, InvalidAuth, OpenZones, PanelStatus
 from .const import AGGREGATE_PARTITION_IDX, DOMAIN
 from .coordinator import Amt8000Coordinator
 
@@ -45,12 +45,13 @@ async def _run_command(coro) -> None:
         raise HomeAssistantError(f"Could not reach the panel: {exc}") from exc
 
 
-def _device_info(entry: ConfigEntry) -> DeviceInfo:
+def _device_info(entry: ConfigEntry, status: PanelStatus | None = None) -> DeviceInfo:
     return DeviceInfo(
         identifiers={(DOMAIN, f"{entry.data[CONF_HOST]}:{entry.data[CONF_PORT]}")},
         name="Intelbras AMT 8000",
         manufacturer="Intelbras",
         model="AMT 8000",
+        sw_version=status.version if status else None,
     )
 
 
@@ -70,7 +71,7 @@ class Amt8000PartitionPanel(CoordinatorEntity[Amt8000Coordinator], AlarmControlP
         group_num = partition_idx  # idx 1 → "Group 1", idx 2 → "Group 2", etc.
         self._attr_unique_id = f"{entry.entry_id}_partition_{partition_idx}"
         self._attr_name = f"Group {group_num}"
-        self._attr_device_info = _device_info(entry)
+        self._attr_device_info = _device_info(entry, coordinator.data)
 
     def _partition(self):
         if not self.coordinator.data:
@@ -115,7 +116,7 @@ class Amt8000MasterPanel(CoordinatorEntity[Amt8000Coordinator], AlarmControlPane
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_all"
         self._attr_name = "All Groups"
-        self._attr_device_info = _device_info(entry)
+        self._attr_device_info = _device_info(entry, coordinator.data)
 
     def _real_partitions(self):
         if not self.coordinator.data:

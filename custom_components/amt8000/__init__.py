@@ -13,6 +13,7 @@ PLATFORMS = [
     Platform.ALARM_CONTROL_PANEL,
     Platform.BINARY_SENSOR,
     Platform.EVENT,
+    Platform.SENSOR,
     Platform.SWITCH,
 ]
 # Platforms that can send commands (arm/disarm, PGM, bypass) to the panel.

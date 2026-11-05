@@ -20,6 +20,13 @@
           "port": "TCP port",
           "password": "Panel password (4 or 6 digits)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Intelbras AMT 8000",
+        "description": "The panel rejected the saved password for {host}. Enter the current remote-access password.",
+        "data": {
+          "password": "Panel password (4 or 6 digits)"
+        }
       }
     },
     "error": {
@@ -28,7 +35,8 @@
       "unknown": "Unexpected error. See Home Assistant logs."
     },
     "abort": {
-      "already_configured": "This panel is already configured."
+      "already_configured": "This panel is already configured.",
+      "reauth_successful": "Password updated."
     }
   }
 }

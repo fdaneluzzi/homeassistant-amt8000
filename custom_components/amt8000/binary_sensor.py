@@ -7,6 +7,7 @@ from homeassistant.components.binary_sensor import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -24,6 +25,7 @@ async def async_setup_entry(
         for zone in coordinator.data.zones
     ]
     entities.append(Amt8000SirenSensor(coordinator, entry))
+    entities.append(Amt8000TamperSensor(coordinator, entry))
     async_add_entities(entities)
 
 
@@ -38,7 +40,7 @@ class Amt8000ZoneSensor(CoordinatorEntity[Amt8000Coordinator], BinarySensorEntit
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_zone_{zone_number}"
         self._attr_name = f"Zone {zone_number}"
-        self._attr_device_info = _device_info(entry)
+        self._attr_device_info = _device_info(entry, coordinator.data)
 
     def _zone(self):
         if not self.coordinator.data:
@@ -79,10 +81,30 @@ class Amt8000SirenSensor(CoordinatorEntity[Amt8000Coordinator], BinarySensorEnti
         super().__init__(coordinator)
         self._attr_unique_id = f"{entry.entry_id}_siren"
         self._attr_name = "Siren"
-        self._attr_device_info = _device_info(entry)
+        self._attr_device_info = _device_info(entry, coordinator.data)
 
     @property
     def is_on(self) -> bool | None:
         if not self.coordinator.data:
             return None
         return self.coordinator.data.siren_live
+
+
+class Amt8000TamperSensor(CoordinatorEntity[Amt8000Coordinator], BinarySensorEntity):
+    """Panel tamper (enclosure) flag."""
+
+    _attr_has_entity_name = True
+    _attr_device_class = BinarySensorDeviceClass.TAMPER
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: Amt8000Coordinator, entry: ConfigEntry) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{entry.entry_id}_tamper"
+        self._attr_name = "Tamper"
+        self._attr_device_info = _device_info(entry, coordinator.data)
+
+    @property
+    def is_on(self) -> bool | None:
+        if not self.coordinator.data:
+            return None
+        return self.coordinator.data.tamper

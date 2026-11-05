@@ -5,6 +5,7 @@ import logging
 from datetime import timedelta
 
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .client import Amt8000Client, CannotConnect, InvalidAuth, PanelStatus
@@ -30,8 +31,9 @@ class Amt8000Coordinator(DataUpdateCoordinator[PanelStatus]):
         try:
             status = await self.client.get_status()
         except InvalidAuth as exc:
-            # Auth failures are always fatal — wrong password won't self-heal.
-            raise UpdateFailed(f"Authentication failed: {exc}") from exc
+            # A wrong password won't self-heal, and retrying it forever could
+            # lock the panel out: stop polling and ask the user to re-enter it.
+            raise ConfigEntryAuthFailed(f"Authentication failed: {exc}") from exc
         except CannotConnect as exc:
             self._consecutive_failures += 1
             if self._consecutive_failures >= 3:
