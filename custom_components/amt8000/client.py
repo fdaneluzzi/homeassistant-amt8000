@@ -119,6 +119,9 @@ class Amt8000Client:
         # The panel accepts very few simultaneous sessions, so the periodic
         # poll and user commands must never talk to it at the same time.
         self._lock = asyncio.Lock()
+        # Raw 0x0B4A payload of the last poll, kept for diagnostics so users
+        # on untested firmwares can share it without enabling debug logs.
+        self.last_status_payload: bytes | None = None
 
     # ── wire helpers ──────────────────────────────────────────────────────────
 
@@ -273,6 +276,7 @@ class Amt8000Client:
         await self._disconnect(writer)
 
         payload = self._response_payload(status_resp)
+        self.last_status_payload = payload
         return self._parse_status(payload, pgm_indexes)
 
     async def arm_partition(self, partition_idx: int) -> None:

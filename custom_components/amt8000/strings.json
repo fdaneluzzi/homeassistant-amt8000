@@ -1,23 +1,42 @@
 {
+  "options": {
+    "step": {
+      "init": {
+        "title": "Zone sensor types",
+        "description": "Read-only mode hides arm/disarm, PGM and bypass controls (monitoring only). Pick each zone's sensor class below.",
+        "data": {
+          "read_only": "Read-only (monitoring only, no arm/disarm/PGM/bypass)"
+        }
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {
         "title": "Intelbras AMT 8000",
-        "description": "Connect to your AMT 8000 alarm panel via ISECNet v2 (TCP {port}).",
+        "description": "Connect to your AMT 8000 alarm panel.",
         "data": {
           "host": "Panel IP address",
           "port": "TCP port",
           "password": "Panel password (4 or 6 digits)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Intelbras AMT 8000",
+        "description": "The panel rejected the saved password for {host}. Enter the current remote-access password.",
+        "data": {
+          "password": "Panel password (4 or 6 digits)"
+        }
       }
     },
     "error": {
-      "cannot_connect": "Cannot connect to the panel. Check IP and port.",
+      "cannot_connect": "Cannot connect to the panel. Check the IP address and port.",
       "invalid_auth": "Invalid password.",
-      "unknown": "Unexpected error. Check logs."
+      "unknown": "Unexpected error. See Home Assistant logs."
     },
     "abort": {
-      "already_configured": "This panel is already configured."
+      "already_configured": "This panel is already configured.",
+      "reauth_successful": "Password updated."
     }
   }
 }

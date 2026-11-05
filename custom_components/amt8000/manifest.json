@@ -1,10 +1,12 @@
 {
   "domain": "amt8000",
   "name": "Intelbras AMT 8000",
-  "codeowners": ["@fdaneluzzi"],
+  "codeowners": [
+    "@fdaneluzzi"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/fdaneluzzi/homeassistant-amt8000",
-  "homeassistant": "2024.1.0",
+  "homeassistant": "2024.11.0",
   "iot_class": "local_polling",
-  "version": "0.1.0"
+  "version": "0.2.0"
 }

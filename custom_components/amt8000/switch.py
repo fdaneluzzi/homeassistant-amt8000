@@ -53,7 +53,7 @@ class Amt8000ZoneBypassSwitch(CoordinatorEntity[Amt8000Coordinator], SwitchEntit
         self._zone_number = zone_number
         self._attr_unique_id = f"{entry.entry_id}_zone_{zone_number}_bypass"
         self._attr_name = f"Zone {zone_number} bypass"
-        self._attr_device_info = _device_info(entry)
+        self._attr_device_info = _device_info(entry, coordinator.data)
 
     def _zone(self):
         if not self.coordinator.data:
@@ -98,7 +98,7 @@ class Amt8000PgmSwitch(CoordinatorEntity[Amt8000Coordinator], SwitchEntity):
         self._number = pgm_index + 1
         self._attr_unique_id = f"{entry.entry_id}_pgm_{self._number}"
         self._attr_name = f"PGM {self._number}"
-        self._attr_device_info = _device_info(entry)
+        self._attr_device_info = _device_info(entry, coordinator.data)
 
     def _pgm(self):
         if not self.coordinator.data:

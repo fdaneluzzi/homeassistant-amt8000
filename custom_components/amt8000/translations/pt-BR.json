@@ -20,6 +20,13 @@
           "port": "Porta TCP",
           "password": "Senha da central (4 ou 6 dígitos)"
         }
+      },
+      "reauth_confirm": {
+        "title": "Intelbras AMT 8000",
+        "description": "A central {host} recusou a senha salva. Informe a senha de acesso remoto atual.",
+        "data": {
+          "password": "Senha da central (4 ou 6 dígitos)"
+        }
       }
     },
     "error": {
@@ -28,7 +35,8 @@
       "unknown": "Erro inesperado. Consulte os logs do Home Assistant."
     },
     "abort": {
-      "already_configured": "Esta central já está configurada."
+      "already_configured": "Esta central já está configurada.",
+      "reauth_successful": "Senha atualizada."
     }
   }
 }
