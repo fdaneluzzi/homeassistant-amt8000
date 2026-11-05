@@ -6,7 +6,7 @@
   ],
   "config_flow": true,
   "documentation": "https://github.com/fdaneluzzi/homeassistant-amt8000",
-  "issue_tracker": "https://github.com/fdaneluzzi/homeassistant-amt8000/issues",
   "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/fdaneluzzi/homeassistant-amt8000/issues",
   "version": "0.2.0"
 }
